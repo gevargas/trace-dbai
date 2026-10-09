@@ -1,4 +1,3 @@
-
 # TRACE DB+AI PostgreSQL feasibility pilot
 
 This pilot illustrates selected mechanisms from the EDBT 2027 vision paper using Python and stock PostgreSQL. It requires no PostgreSQL extensions, custom optimiser or language-model service.
@@ -15,18 +14,22 @@ The script runs five experiments:
 
 ## Files
 
-- `feasibility.py`: experiment driver and synthetic-data generator.
+- `tracedbai-postgres-pilot/feasibility.py`: experiment driver and synthetic-data generator.
 - `feasibility_results.json`: results from a previous run. Running the script replaces this file in the current directory.
 
-Use a dedicated test database. The script creates, truncates and drops tables, including names such as `F`, `H`, `policy` and `budget`, and some drops use `CASCADE`. Do not point it at an existing application database. Run only one experiment driver against this database at a time.
+Use a dedicated test database. The script creates, truncates and drops tables, including names such as `F`, `H`, `policy` and `budget`, and some drops use `CASCADE`. Do not point it at an existing application database.
 
 ## Run in GitHub Codespaces
 
-These instructions assume a Linux Codespace with Python 3, Docker and a running Docker daemon. PostgreSQL runs in a separate local container. The supplied results used PostgreSQL 16.15; the commands below use the PostgreSQL 16 image, whose patch version can change.
+These instructions assume a Linux Codespace with Python 3, Docker and a running Docker daemon. PostgreSQL runs in a separate local container. The supplied results used PostgreSQL 16.15; the commands below are written for the current repository layout.
 
 ### 1. Open the repository
 
-Place `feasibility.py` in your repository. On GitHub, select **Code → Codespaces → Create codespace on main**, or select the branch containing the script. Once the Codespace opens, open its terminal and change to the directory containing `feasibility.py`.
+Open the repository in GitHub Codespaces, then move into the pilot directory before running the workload:
+
+```bash
+cd tracedbai-postgres-pilot
+```
 
 Check the prerequisites:
 
@@ -91,7 +94,7 @@ with psycopg2.connect(os.environ['FEAS_DSN']) as connection:
 PY
 ```
 
-Set `FEAS_DSN` again after opening a new terminal. The script's default connection uses a Unix socket at `/tmp` on port 5433, which does not reach this Docker database; the explicit TCP connection above is required.
+Set `FEAS_DSN` again after opening a new terminal. The script's default connection uses a Unix socket at `/tmp` on port 5433, which does not reach this Docker database; the explicit TCP connection above is required for this setup.
 
 ### 5. Run all experiments
 
@@ -100,18 +103,18 @@ To preserve the supplied results, run from a separate output directory:
 ```bash
 mkdir -p runs/codespaces
 cd runs/codespaces
-python -u ../../feasibility.py
+python -u ../../tracedbai-postgres-pilot/feasibility.py
 ```
 
-The terminal prints progress for E1–E5, followed by the complete JSON results. A successful run writes `runs/codespaces/feasibility_results.json`. The largest workloads include one million input records and 531,441 finite-domain states, so allow the full suite to finish; duration depends on the Codespace resources.
+The terminal prints progress for E1–E5, followed by the complete JSON results. A successful run writes `runs/codespaces/feasibility_results.json`. The largest workloads include one million input records, a few hundred thousand join rows and a few million dependency edges.
 
 To reduce some timing repetitions:
 
 ```bash
-FEAS_REPS=3 python -u ../../feasibility.py
+FEAS_REPS=3 python -u ../../tracedbai-postgres-pilot/feasibility.py
 ```
 
-This does **not** reduce dataset sizes or every experiment's repetitions: E3 uses 15 or 9 timed repetitions, E4 uses 20 trials per variant, and E5 uses eight worker threads. `FEAS_REPS` must be a positive integer.
+This does not reduce dataset sizes or every experiment's repetitions: E3 uses 15 or 9 timed repetitions, E4 uses 20 trials per variant, and E5 uses eight worker threads. `FEAS_REPS` must be a positive integer.
 
 Inspect the output:
 
@@ -119,17 +122,17 @@ Inspect the output:
 python -m json.tool feasibility_results.json
 ```
 
-In the Codespaces file explorer, right-click the generated JSON and choose **Download** to save a local copy.
+In the Codespaces file explorer, right-click the generated JSON and choose Download to save a local copy.
 
 ## Expected checks and interpretation
 
 - **E1:** clean mappings have no loss witnesses. For each declared domain, the lossy mapping has one loss-witness group and `2 * 3**(m-1)` unknown-collapse rows.
 - **E2:** `agrees_with_oracle` should be `true` for all tested graph sizes.
 - **E3:** timings vary with hardware, caching and database activity. A negative measured overhead is not evidence that governance intrinsically improves performance.
-- **E4:** the supplied run reports 20 final violations for both unprotected variants, and zero for `SERIALIZABLE` and the locking barrier after the script's serial retry handling. This is one controlled interleaving, not exhaustive concurrency verification.
-- **E5:** five concurrent requests of 20 units fill the 100-unit budget. The additional 60-unit walkthrough request is refused. Ten units are free after consumption because the validation reservation of 20 units remains outstanding.
+- **E4:** the supplied run reports 20 final violations for both unprotected variants, and zero for `SERIALIZABLE` and the locking barrier after the script's serial retry handling. This is one controlled example of the race.
+- **E5:** five concurrent requests of 20 units fill the 100-unit budget. The additional 60-unit walkthrough request is refused. Ten units are free after consumption because the validation reservation uses the same `total - reserved - consumed` check.
 
-Budget units in E3 and E5 are illustrative accounting values. The pilot does not measure energy, carbon, water or actual LLM resource consumption. It does not validate the full operator algebra, contextual meanings, community benefit or general-purpose agent governance.
+Budget units in E3 and E5 are illustrative accounting values. The pilot does not measure energy, carbon, water or actual LLM resource consumption. It does not validate the full operator algebra, content ownership model or real-world compliance semantics.
 
 ## Reproducibility
 
@@ -140,7 +143,7 @@ python -m pip freeze > requirements-used.txt
 docker image inspect postgres:16 --format '{{json .RepoDigests}}' > postgres-image-digests.txt
 ```
 
-The results already record the PostgreSQL and Python versions, CPU and core count. Python's random generator is seeded, but PostgreSQL's `random()` is not seeded by this script, so generated database instances and timings can differ across runs. For stricter reproduction, pin the database image digest and explicitly seed database-side randomness in a separately documented script revision.
+The results already record the PostgreSQL and Python versions, CPU and core count. Python's random generator is seeded, but PostgreSQL's `random()` is not seeded by this script, so generated database values are intentionally non-deterministic across runs.
 
 ## Troubleshooting
 
