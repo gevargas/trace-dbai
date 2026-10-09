@@ -1,6 +1,6 @@
 # TRACE DB+AI PostgreSQL feasibility pilot
 
-This pilot illustrates selected mechanisms from the EDBT 2027 vision paper using Python and stock PostgreSQL. It requires no PostgreSQL extensions, custom optimiser or language-model service.
+This pilot illustrates selected mechanisms using Python and stock PostgreSQL. It requires no PostgreSQL extensions, custom optimiser or language-model service.
 
 The script runs five experiments:
 
